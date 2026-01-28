@@ -1,9 +1,9 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 class ApiConstants {
   // Weather API
-  static String get weatherApiKey =>
-      dotenv.env['WEATHER_API_KEY'] ?? 'demo_key';
+  static const String weatherApiKey = String.fromEnvironment(
+    'WEATHER_API_KEY',
+    defaultValue: 'demo_key',
+  );
   static const String weatherBaseUrl = 'http://api.weatherapi.com/v1';
   static const String weatherForecastEndpoint = '/forecast.json';
   

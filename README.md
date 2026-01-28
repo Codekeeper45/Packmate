@@ -61,7 +61,6 @@ APK будет в `build/app/outputs/flutter-apk/app-release.apk`
 
 ```
 GEMINI_API_KEY=your_key_here
-WEATHER_API_KEY=your_key_here
 ```
 
 ## Установка APK
@@ -105,7 +104,13 @@ lib/
 
 ## Конфигурация API
 
-Для работы погоды укажите ключ `WEATHER_API_KEY` в `.env`.
+Для работы погоды передайте ключ через `--dart-define`:
+
+```bash
+flutter run --dart-define=WEATHER_API_KEY=your_key_here
+flutter build apk --release --dart-define=WEATHER_API_KEY=your_key_here
+```
+
 Для работы Gemini укажите ключ `GEMINI_API_KEY` в `.env`.
 Если ключ Gemini не указан, используется rule-based генерация.
 
