@@ -25,7 +25,7 @@ class TripTypePage extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => context.push(AppRoutes.templates),
+            onPressed: () => context.go(AppRoutes.templates),
             child: const Text('Шаблоны'),
           ),
         ],

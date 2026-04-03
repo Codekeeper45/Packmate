@@ -50,7 +50,7 @@ class HomePage extends ConsumerWidget {
                     ),
                     // Avatar
                     GestureDetector(
-                      onTap: () => context.push(AppRoutes.settings),
+                      onTap: () => context.go(AppRoutes.settings),
                       child: Container(
                         width: 48,
                         height: 48,
@@ -119,7 +119,7 @@ class HomePage extends ConsumerWidget {
                             icon: Icons.folder_outlined,
                             label: 'Шаблоны',
                             color: colorScheme.secondary,
-                            onTap: () => context.push(AppRoutes.templates),
+                            onTap: () => context.go(AppRoutes.templates),
                           ),
                         ),
                       ],
@@ -155,7 +155,7 @@ class HomePage extends ConsumerWidget {
                           ),
                         ),
                         TextButton(
-                          onPressed: () => context.push(AppRoutes.templates),
+                          onPressed: () => context.go(AppRoutes.templates),
                           child: const Text('Все'),
                         ),
                       ],

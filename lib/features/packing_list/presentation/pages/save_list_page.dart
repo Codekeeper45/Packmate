@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/firestore_service.dart';
 import '../../../trip_setup/presentation/providers/trip_provider.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -34,10 +36,46 @@ class _SaveListPageState extends ConsumerState<SaveListPage> {
     super.dispose();
   }
 
-  void _saveAndProceed() {
-    // Save list logic here
-    ref.read(currentTripProvider.notifier).updateStatus('packing');
-    context.go(AppRoutes.packingMode);
+  Future<void> _saveAndProceed() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Войдите в аккаунт для сохранения.')),
+      );
+      return;
+    }
+
+    final trip = ref.read(currentTripProvider);
+    if (trip == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось найти данные поездки.')),
+      );
+      return;
+    }
+
+    final categories = ref.read(packingListProvider);
+    final firestoreService = ref.read(firestoreServiceProvider);
+
+    try {
+      await firestoreService.saveTrip(user.uid, trip);
+      if (categories.isNotEmpty) {
+        await firestoreService.saveCategories(user.uid, trip.id, categories);
+      }
+
+      if (_saveAsTemplate) {
+        await firestoreService.saveTemplate(user.uid, trip, categories);
+      }
+
+      ref.read(currentTripProvider.notifier).updateStatus('packing');
+
+      if (!mounted) return;
+      context.go(AppRoutes.packingMode);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ошибка сохранения. Проверьте сеть и попробуйте снова.')),
+      );
+    }
   }
 
   @override

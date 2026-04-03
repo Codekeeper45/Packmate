@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/app_router.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../packing_list/domain/entities/category.dart';
+import '../../../trip_setup/presentation/providers/trip_provider.dart';
 import '../../../trip_setup/domain/entities/trip.dart';
 
 class TemplatesPage extends ConsumerWidget {
@@ -22,8 +26,8 @@ class TemplatesPage extends ConsumerWidget {
       ),
       body: user == null
           ? _buildAuthRequiredState(theme)
-          : StreamBuilder<List<Trip>>(
-              stream: firestoreService.getTrips(user.uid),
+          : StreamBuilder<List<Map<String, dynamic>>>(
+              stream: firestoreService.getTemplates(user.uid),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -33,22 +37,53 @@ class TemplatesPage extends ConsumerWidget {
                   return _buildErrorState(theme, snapshot.error.toString());
                 }
 
-                final trips = snapshot.data ?? [];
-                if (trips.isEmpty) {
+                final templates = _parseTemplates(snapshot.data ?? []);
+                if (templates.isEmpty) {
                   return _buildEmptyState(theme);
                 }
 
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: trips.length,
+                  itemCount: templates.length,
                   itemBuilder: (context, index) {
-                    final trip = trips[index];
-                    return _buildTemplateCard(context, trip);
+                    final template = templates[index];
+                    return _buildTemplateCard(context, ref, template);
                   },
                 );
               },
             ),
     );
+  }
+
+  List<_TemplateEntry> _parseTemplates(List<Map<String, dynamic>> docs) {
+    final templates = <_TemplateEntry>[];
+
+    for (final doc in docs) {
+      final tripJson = doc['trip'];
+      if (tripJson is! Map<String, dynamic>) {
+        continue;
+      }
+
+      try {
+        final trip = Trip.fromJson(Map<String, dynamic>.from(tripJson));
+        final categoriesRaw = doc['categories'];
+        final categories = <Category>[];
+
+        if (categoriesRaw is List) {
+          for (final categoryRaw in categoriesRaw) {
+            if (categoryRaw is Map<String, dynamic>) {
+              categories.add(Category.fromJson(Map<String, dynamic>.from(categoryRaw)));
+            }
+          }
+        }
+
+        templates.add(_TemplateEntry(trip: trip, categories: categories));
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return templates;
   }
 
   Widget _buildAuthRequiredState(ThemeData theme) {
@@ -146,10 +181,11 @@ class TemplatesPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildTemplateCard(BuildContext context, Trip template) {
+  Widget _buildTemplateCard(BuildContext context, WidgetRef ref, _TemplateEntry template) {
     final theme = Theme.of(context);
-    final startDate = '${template.startDate.day.toString().padLeft(2, '0')}.${template.startDate.month.toString().padLeft(2, '0')}';
-    final endDate = '${template.endDate.day.toString().padLeft(2, '0')}.${template.endDate.month.toString().padLeft(2, '0')}';
+    final trip = template.trip;
+    final startDate = '${trip.startDate.day.toString().padLeft(2, '0')}.${trip.startDate.month.toString().padLeft(2, '0')}';
+    final endDate = '${trip.endDate.day.toString().padLeft(2, '0')}.${trip.endDate.month.toString().padLeft(2, '0')}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -168,12 +204,11 @@ class TemplatesPage extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            // Load template logic
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Открываем "${template.destination}"...'),
-              ),
-            );
+            ref.read(currentTripProvider.notifier).setTrip(trip, fromRemote: true);
+            ref.read(packingListProvider.notifier).setCategories(template.categories, fromRemote: true);
+            ref.read(selectedTripTypeProvider.notifier).state = trip.type;
+
+            context.go(AppRoutes.generatedList);
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -185,12 +220,12 @@ class TemplatesPage extends ConsumerWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: _getTripTypeColor(template.type).withOpacity(0.15),
+                    color: _getTripTypeColor(trip.type).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: Text(
-                      _getTripTypeIcon(template.type),
+                      _getTripTypeIcon(trip.type),
                       style: const TextStyle(fontSize: 28),
                     ),
                   ),
@@ -203,7 +238,7 @@ class TemplatesPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        template.destination.isEmpty ? 'Без названия' : template.destination,
+                        trip.destination.isEmpty ? 'Без названия' : trip.destination,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -211,7 +246,7 @@ class TemplatesPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$startDate - $endDate • ${template.durationDays} дн.',
+                        '$startDate - $endDate • ${trip.durationDays} дн.',
                         style: TextStyle(
                           color: theme.colorScheme.onSurface.withOpacity(0.6),
                           fontSize: 14,
@@ -260,4 +295,14 @@ class TemplatesPage extends ConsumerWidget {
         return AppColors.tripOther;
     }
   }
+}
+
+class _TemplateEntry {
+  final Trip trip;
+  final List<Category> categories;
+
+  const _TemplateEntry({
+    required this.trip,
+    required this.categories,
+  });
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/firestore_service.dart';
 import '../../../trip_setup/presentation/providers/trip_provider.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -240,15 +242,43 @@ class CompletionPage extends ConsumerWidget {
     );
   }
 
-  void _saveAsTemplateAndFinish(BuildContext context, WidgetRef ref) {
-    // Save as template logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Шаблон сохранён!'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-    _finishAndReset(context, ref);
+  Future<void> _saveAsTemplateAndFinish(BuildContext context, WidgetRef ref) async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Войдите в аккаунт для сохранения шаблона.')),
+      );
+      return;
+    }
+
+    final trip = ref.read(currentTripProvider);
+    if (trip == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось найти данные поездки.')),
+      );
+      return;
+    }
+
+    final categories = ref.read(packingListProvider);
+    final firestoreService = ref.read(firestoreServiceProvider);
+
+    try {
+      await firestoreService.saveTemplate(user.uid, trip, categories);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Шаблон сохранён!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      _finishAndReset(context, ref);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось сохранить шаблон.')),
+      );
+    }
   }
 
   void _finishAndReset(BuildContext context, WidgetRef ref) {

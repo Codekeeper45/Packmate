@@ -37,7 +37,7 @@ class SettingsPage extends ConsumerWidget {
                 icon: Icons.person_outline,
                 title: 'Профиль',
                 subtitle: user?.email ?? (user?.isAnonymous == true ? 'Гость' : 'Не авторизован'),
-                onTap: () => context.push(AppRoutes.profile),
+                onTap: () => context.go(AppRoutes.profile),
               ),
             ],
           ),

@@ -14,9 +14,15 @@ class MainShell extends StatelessWidget {
   });
 
   int _calculateSelectedIndex() {
-    if (currentLocation == AppRoutes.home) return 0;
-    if (currentLocation == AppRoutes.templates) return 1;
-    if (currentLocation == AppRoutes.settings) return 2;
+    if (currentLocation == AppRoutes.home || currentLocation.startsWith('${AppRoutes.home}?')) {
+      return 0;
+    }
+    if (currentLocation == AppRoutes.templates || currentLocation.startsWith('${AppRoutes.templates}/')) {
+      return 1;
+    }
+    if (currentLocation == AppRoutes.settings || currentLocation.startsWith('${AppRoutes.settings}/')) {
+      return 2;
+    }
     return 0;
   }
 
