@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/firestore_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../trip_setup/domain/entities/trip.dart';
 
 class TemplatesPage extends ConsumerWidget {
   const TemplatesPage({super.key});
@@ -9,43 +12,72 @@ class TemplatesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    // Mock templates for demo
-    final templates = [
-      _MockTemplate(
-        name: 'Поход в горы',
-        tripType: 'hike',
-        itemCount: 45,
-        usageCount: 3,
-      ),
-      _MockTemplate(
-        name: 'Пляжный отдых',
-        tripType: 'beach',
-        itemCount: 32,
-        usageCount: 5,
-      ),
-      _MockTemplate(
-        name: 'Командировка Москва',
-        tripType: 'business',
-        itemCount: 28,
-        usageCount: 8,
-      ),
-    ];
+    final user = ref.watch(currentUserProvider);
+    final firestoreService = ref.watch(firestoreServiceProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Мои шаблоны'),
         automaticallyImplyLeading: false,
       ),
-      body: templates.isEmpty
-          ? _buildEmptyState(theme)
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: templates.length,
-              itemBuilder: (context, index) {
-                final template = templates[index];
-                return _buildTemplateCard(context, template);
+      body: user == null
+          ? _buildAuthRequiredState(theme)
+          : StreamBuilder<List<Trip>>(
+              stream: firestoreService.getTrips(user.uid),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return _buildErrorState(theme, snapshot.error.toString());
+                }
+
+                final trips = snapshot.data ?? [];
+                if (trips.isEmpty) {
+                  return _buildEmptyState(theme);
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: trips.length,
+                  itemBuilder: (context, index) {
+                    final trip = trips[index];
+                    return _buildTemplateCard(context, trip);
+                  },
+                );
               },
             ),
+    );
+  }
+
+  Widget _buildAuthRequiredState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.lock_outline,
+            size: 80,
+            color: theme.colorScheme.onSurface.withOpacity(0.4),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Войдите в аккаунт',
+            style: TextStyle(
+              fontSize: 18,
+              color: theme.colorScheme.onSurface.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Чтобы видеть шаблоны из облака',
+            style: TextStyle(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -79,8 +111,46 @@ class TemplatesPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildTemplateCard(BuildContext context, _MockTemplate template) {
+  Widget _buildErrorState(ThemeData theme, String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 72,
+              color: theme.colorScheme.error,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Не удалось загрузить данные',
+              style: TextStyle(
+                fontSize: 18,
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withOpacity(0.65),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateCard(BuildContext context, Trip template) {
     final theme = Theme.of(context);
+    final startDate = '${template.startDate.day.toString().padLeft(2, '0')}.${template.startDate.month.toString().padLeft(2, '0')}';
+    final endDate = '${template.endDate.day.toString().padLeft(2, '0')}.${template.endDate.month.toString().padLeft(2, '0')}';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -101,7 +171,7 @@ class TemplatesPage extends ConsumerWidget {
             // Load template logic
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Загружаем "${template.name}"...'),
+                content: Text('Открываем "${template.destination}"...'),
               ),
             );
           },
@@ -115,12 +185,12 @@ class TemplatesPage extends ConsumerWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: _getTripTypeColor(template.tripType).withOpacity(0.15),
+                    color: _getTripTypeColor(template.type).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: Text(
-                      _getTripTypeIcon(template.tripType),
+                      _getTripTypeIcon(template.type),
                       style: const TextStyle(fontSize: 28),
                     ),
                   ),
@@ -133,7 +203,7 @@ class TemplatesPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        template.name,
+                        template.destination.isEmpty ? 'Без названия' : template.destination,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -141,7 +211,7 @@ class TemplatesPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${template.itemCount} вещей • Использован ${template.usageCount} раз',
+                        '$startDate - $endDate • ${template.durationDays} дн.',
                         style: TextStyle(
                           color: theme.colorScheme.onSurface.withOpacity(0.6),
                           fontSize: 14,
@@ -170,6 +240,7 @@ class TemplatesPage extends ConsumerWidget {
       'beach': '🏖️',
       'city': '🏙️',
       'business': '💼',
+      'adventure': '🧭',
       'other': '✈️',
     };
     return icons[type] ?? '✈️';
@@ -189,18 +260,4 @@ class TemplatesPage extends ConsumerWidget {
         return AppColors.tripOther;
     }
   }
-}
-
-class _MockTemplate {
-  final String name;
-  final String tripType;
-  final int itemCount;
-  final int usageCount;
-
-  _MockTemplate({
-    required this.name,
-    required this.tripType,
-    required this.itemCount,
-    required this.usageCount,
-  });
 }

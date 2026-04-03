@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart';
 
+import '../../../../core/services/firestore_service.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../packing_list/domain/entities/category.dart';
+import '../../../packing_list/domain/entities/packing_item.dart';
+import '../../../trip_setup/domain/entities/trip.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -36,6 +41,22 @@ class SettingsPage extends ConsumerWidget {
               ),
             ],
           ),
+
+          if (kDebugMode && user != null) ...[
+            const SizedBox(height: 12),
+            _buildSettingsCard(
+              context,
+              children: [
+                _buildSettingsTile(
+                  context,
+                  icon: Icons.science_outlined,
+                  title: 'Создать 3 demo-записи Firestore',
+                  subtitle: 'Только debug-режим для проверки задания',
+                  onTap: () => _seedFirestoreDemoData(context, ref),
+                ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 24),
 
@@ -334,5 +355,110 @@ class SettingsPage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _seedFirestoreDemoData(BuildContext context, WidgetRef ref) async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала войдите в аккаунт.')),
+      );
+      return;
+    }
+
+    final firestoreService = ref.read(firestoreServiceProvider);
+    final now = DateTime.now();
+
+    final trips = [
+      {
+        'type': 'city',
+        'destination': 'Москва',
+        'accommodation': 'hotel',
+        'activities': <String>['museum', 'walking'],
+      },
+      {
+        'type': 'beach',
+        'destination': 'Сочи',
+        'accommodation': 'hotel',
+        'activities': <String>['swim', 'relax'],
+      },
+      {
+        'type': 'business',
+        'destination': 'Санкт-Петербург',
+        'accommodation': 'hotel',
+        'activities': <String>['meeting'],
+      },
+    ];
+
+    try {
+      for (var i = 0; i < trips.length; i++) {
+        final tripSeed = trips[i];
+        final tripId = 'demo_trip_${now.millisecondsSinceEpoch}_$i';
+
+        final trip = Trip(
+          id: tripId,
+          type: tripSeed['type']! as String,
+          destination: tripSeed['destination']! as String,
+          startDate: now.add(Duration(days: 7 + i)),
+          endDate: now.add(Duration(days: 10 + i)),
+          durationDays: 3,
+          accommodation: tripSeed['accommodation']! as String,
+          activities: tripSeed['activities']! as List<String>,
+          weatherConditions: 'clear',
+          weatherTemp: '+22',
+          createdAt: now.add(Duration(minutes: i)),
+          status: 'planned',
+        );
+
+        final baseItemTime = now.add(Duration(minutes: i));
+        final category = Category(
+          id: 'demo_cat_${tripId}_0',
+          tripId: tripId,
+          name: 'Документы',
+          icon: '📄',
+          sortOrder: 0,
+          colorHex: '#4CAF50',
+          items: [
+            PackingItem(
+              id: 'demo_item_${tripId}_0',
+              tripId: tripId,
+              categoryId: 'demo_cat_${tripId}_0',
+              name: 'Паспорт',
+              quantity: 1,
+              isPacked: false,
+              isEssential: true,
+              sortOrder: 0,
+              createdAt: baseItemTime,
+            ),
+            PackingItem(
+              id: 'demo_item_${tripId}_1',
+              tripId: tripId,
+              categoryId: 'demo_cat_${tripId}_0',
+              name: 'Билеты',
+              quantity: 1,
+              isPacked: false,
+              isEssential: true,
+              sortOrder: 1,
+              createdAt: baseItemTime.add(const Duration(seconds: 1)),
+            ),
+          ],
+          totalItems: 2,
+          packedItems: 0,
+        );
+
+        await firestoreService.saveTrip(user.uid, trip);
+        await firestoreService.saveCategories(user.uid, tripId, [category]);
+      }
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Готово: создано 3 demo-записи в Firestore.')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось создать demo-записи. Проверьте сеть и Firebase.')),
+      );
+    }
   }
 }
